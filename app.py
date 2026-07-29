@@ -19,7 +19,8 @@ except Exception:
 DATA_FILE = "Dados.xlsx"
 SHEET = "respostas"
 TZ = "America/Sao_Paulo"
-LOGO_FILE = "logo_Justica_Federal_Ceara_branca.png"
+FOOTER_LOGOS_FILE = os.path.join("assets", "logos-rodape.svg")
+STYLE_FILE = "styles.css"
 
 # Quando o app roda no Streamlit Community Cloud, o disco é apagado a cada
 # reinício/redeploy — por isso as respostas são gravadas em uma base do
@@ -339,6 +340,11 @@ def _logo_base64(path: str):
         return base64.b64encode(f.read()).decode("utf-8")
 
 
+def _asset_data_uri(path: str, mime_type: str) -> str | None:
+    encoded = _logo_base64(path)
+    return f"data:{mime_type};base64,{encoded}" if encoded else None
+
+
 # ---------------- Estilo ----------------
 def inject_css():
     st.markdown(
@@ -560,23 +566,65 @@ def inject_css():
         """,
         unsafe_allow_html=True,
     )
+    if os.path.exists(STYLE_FILE):
+        with open(STYLE_FILE, "r", encoding="utf-8") as css_file:
+            st.markdown(f"<style>{css_file.read()}</style>", unsafe_allow_html=True)
 
 
 def render_header(subtitle: str):
-    b64 = _logo_base64(LOGO_FILE)
-    logo_html = f'<img src="data:image/png;base64,{b64}" />' if b64 else ""
     st.markdown(
         f"""
         <div class="jfce-header">
-            {logo_html}
-            <div class="textos">
-                <div class="titulo">Pesquisa de Satisfação · Justiça Federal no Ceará</div>
-                <div class="subtitulo">{subtitle}</div>
+            <div class="jfce-header__content">
+                <div class="jfce-header__eyebrow">Justiça Federal no Ceará</div>
+                <div class="jfce-header__title">Pesquisa de Satisfação</div>
+                <div class="jfce-header__subtitle">{subtitle}</div>
             </div>
+            <div class="jfce-header__badge">Pesquisa anônima</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_sidebar_brand():
+    st.sidebar.markdown(
+        """
+        <div class="sidebar-brand">
+            <div class="sidebar-brand__eyebrow">JFCE</div>
+            <div class="sidebar-brand__title">Pesquisa de<br>Satisfação</div>
+            <div class="sidebar-brand__subtitle">Escuta ativa para melhorar nossos serviços</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_sidebar_footer():
+    footer_uri = _asset_data_uri(FOOTER_LOGOS_FILE, "image/svg+xml")
+    if footer_uri:
+        st.sidebar.markdown(
+            f'<div class="sidebar-footer"><img src="{footer_uri}" alt="Logos institucionais" /></div>',
+            unsafe_allow_html=True,
+        )
+
+
+def style_plotly(fig, height: int | None = None):
+    fig.update_layout(
+        font={"family": "Montserrat, Inter, Segoe UI, sans-serif", "color": "#3f4347", "size": 12},
+        title={"font": {"color": "#25282b", "size": 16}, "x": 0.02, "xanchor": "left"},
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        colorway=["#006f9f", "#36a8c7", "#21855b", "#e59a3a", "#c33c3c"],
+        margin={"l": 28, "r": 20, "t": 58, "b": 36},
+        hoverlabel={"font": {"family": "Montserrat, Inter, Segoe UI, sans-serif"}},
+        legend={"title": None, "orientation": "h", "y": -0.18},
+    )
+    if height:
+        fig.update_layout(height=height)
+    fig.update_xaxes(showgrid=False, linecolor="#e8eaec", tickfont={"color": "#6d7378"})
+    fig.update_yaxes(gridcolor="#eef0f1", zeroline=False, tickfont={"color": "#6d7378"})
+    return fig
 
 
 def likert_q(label: str, key: str, help_txt: str = "") -> int:
@@ -609,7 +657,7 @@ st.set_page_config(
     page_title="Pesquisa de Satisfação — JFCE",
     page_icon="📋",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="auto",
 )
 inject_css()
 
@@ -620,13 +668,18 @@ if "respostas" not in st.session_state:
 if "enviado" not in st.session_state:
     st.session_state.enviado = False
 
+render_sidebar_brand()
 page = st.sidebar.radio("Navegação", ["Responder pesquisa", "Painel (análises)"])
-st.sidebar.caption("As respostas são registradas de forma anonimizada (sem nome/e-mail/CPF).")
+st.sidebar.markdown(
+    '<div class="sidebar-privacy">As respostas são registradas de forma anonimizada, sem nome, e-mail ou CPF.</div>',
+    unsafe_allow_html=True,
+)
 
 # =========================================================
 # PÁGINA: RESPONDER
 # =========================================================
 if page == "Responder pesquisa":
+    render_sidebar_footer()
     render_header("Sua opinião ajuda a melhorar nossos serviços — leva menos de 2 minutos.")
 
     if st.session_state.enviado:
@@ -638,7 +691,7 @@ if page == "Responder pesquisa":
 
     # ---------- ETAPA 0: tela inicial — escolha do perfil ----------
     if step == 0:
-        st.markdown('<div class="intro-titulo">Para começar, selecione o seu perfil 👇</div>', unsafe_allow_html=True)
+        st.markdown('<div class="intro-titulo">Para começar, selecione o seu perfil</div>', unsafe_allow_html=True)
         st.markdown('<div class="intro-sub">As perguntas seguintes serão adaptadas ao perfil escolhido.</div>', unsafe_allow_html=True)
 
         # Grade 2x2: cards grandes e o card inteiro é clicável (bom para uso em tablet)
@@ -664,7 +717,7 @@ if page == "Responder pesquisa":
 
         colp, colb = st.columns([5, 1])
         with colp:
-            st.markdown(f"#### {info['icone']} {perfil}")
+            st.markdown(f"#### Perfil selecionado: {perfil}")
         with colb:
             if st.button("Trocar perfil", key="btn_trocar_perfil"):
                 reset_wizard()
@@ -680,7 +733,7 @@ if page == "Responder pesquisa":
             # container, então usamos este marcador + CSS :has() para aplicar o
             # cartão branco só neste bloco (ver inject_css).
             st.markdown('<div class="questionario-marker"></div>', unsafe_allow_html=True)
-            st.markdown("**Dados básicos**")
+            st.markdown('<div class="section-title">Dados básicos</div>', unsafe_allow_html=True)
             tem_campo_extra = perfil in (PERFIL_ADVOGADO, PERFIL_SERVIDOR)
             campos = st.columns(4 if tem_campo_extra else 3)
 
@@ -706,8 +759,11 @@ if page == "Responder pesquisa":
             with campos[idx + 1]:
                 genero = st.selectbox("Gênero (opcional)", ["(não informar)"] + GENEROS, key="q_genero")
 
-            st.markdown("---")
-            st.markdown(f"**Perguntas específicas para {perfil}**")
+            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="section-title section-title--profile">Perguntas específicas para {perfil}</div>',
+                unsafe_allow_html=True,
+            )
             st.markdown(f'<div class="likert-legenda">Escala: {LIKERT_LEGENDA}</div>', unsafe_allow_html=True)
 
             dados = {}
@@ -753,8 +809,8 @@ if page == "Responder pesquisa":
                 dados["suporte_administrativo"] = likert_q("Suporte administrativo (secretaria/administração)", "q_suporte_adm")
                 dados["comunicacao_gestao"] = likert_q("Comunicação com a gestão do tribunal", "q_comunic_gestao")
 
-            st.markdown("---")
-            st.markdown("**Avaliação geral**")
+            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-title section-title--rating">Avaliação geral</div>', unsafe_allow_html=True)
 
             comuns = {}
             for col, label in COMUNS_DIMENSOES:
@@ -776,7 +832,7 @@ if page == "Responder pesquisa":
                 "Comentário/sugestão (opcional)", placeholder="Escreva aqui (máx. 500 caracteres)...", max_chars=500, key="q_comentario"
             )
 
-            enviar = st.button("Enviar resposta ✅", type="primary", use_container_width=True, key="btn_enviar_resposta")
+            enviar = st.button("Enviar resposta", type="primary", use_container_width=True, key="btn_enviar_resposta")
 
         if enviar:
             st.session_state.respostas.update(
@@ -808,15 +864,20 @@ if page == "Responder pesquisa":
 # =========================================================
 else:
     render_header("Painel de acompanhamento das respostas.")
-    st.subheader("Painel (análises)")
+    st.markdown('<div class="dashboard-title">Painel de resultados</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="dashboard-subtitle">Acompanhe a percepção dos públicos e identifique oportunidades de melhoria.</div>',
+        unsafe_allow_html=True,
+    )
 
     df = load_data()
 
     if df.empty:
+        render_sidebar_footer()
         st.info("Ainda não há respostas registradas.")
         st.stop()
 
-    st.sidebar.markdown("### Filtros")
+    st.sidebar.markdown('<div class="sidebar-filter-title">Filtros</div>', unsafe_allow_html=True)
     unidades = ["(todas)"] + sorted([x for x in df["unidade"].dropna().unique().tolist() if str(x).strip() != ""])
     tipos = ["(todos)"] + sorted([x for x in df["tipo_usuario"].dropna().unique().tolist() if str(x).strip() != ""])
     freq = st.sidebar.selectbox("Periodicidade", ["Diário", "Semanal", "Mensal"])
@@ -828,6 +889,7 @@ else:
     dmin = df["timestamp"].min()
     dmax = df["timestamp"].max()
     date_range = st.sidebar.date_input("Período", value=(dmin.date(), dmax.date()))
+    render_sidebar_footer()
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start, end = date_range
     else:
@@ -894,6 +956,7 @@ else:
             contagem.columns = ["Nota", "Respostas"]
             fign = px.bar(contagem, x="Nota", y="Respostas", title="Distribuição das notas (0–10)")
             fign.update_xaxes(dtick=1)
+            style_plotly(fign, height=390)
             st.plotly_chart(fign, use_container_width=True)
     with col_pizza:
         dist_geral = distribuicao_satisfacao(f["recomendacao_0_10"])
@@ -909,8 +972,10 @@ else:
             figpz = px.pie(
                 pizza, names="Grupo", values="%", title="Avaliações positivas × neutras × negativas",
                 color="Grupo",
-                color_discrete_map={"Positivas (8-10)": "#1f6f5c", "Neutras (5-7)": "#b45309", "Negativas (0-4)": "#b42318"},
+                color_discrete_map={"Positivas (8-10)": "#21855b", "Neutras (5-7)": "#e59a3a", "Negativas (0-4)": "#c33c3c"},
             )
+            style_plotly(figpz, height=390)
+            figpz.update_layout(legend={"orientation": "v", "y": -0.08})
             st.plotly_chart(figpz, use_container_width=True)
 
     st.markdown("---")
@@ -930,13 +995,16 @@ else:
         with colA:
             fig1 = px.line(agg, x="periodo", y="nota_media", markers=True, title="Nota média geral (0–10)")
             fig1.update_yaxes(range=[0, 10])
+            style_plotly(fig1, height=360)
             st.plotly_chart(fig1, use_container_width=True)
         with colB:
             fig2 = px.line(agg, x="periodo", y="pct_positivas", markers=True, title="% de avaliações positivas (nota 8–10)")
             fig2.update_yaxes(range=[0, 100])
+            style_plotly(fig2, height=360)
             st.plotly_chart(fig2, use_container_width=True)
 
         fig3 = px.bar(agg, x="periodo", y="respostas", title="Volume de respostas")
+        style_plotly(fig3, height=360)
         st.plotly_chart(fig3, use_container_width=True)
 
     st.markdown("---")
@@ -953,6 +1021,7 @@ else:
     else:
         figd = px.bar(dims, x="Média", y="Dimensão", orientation="h", title="Média por dimensão comum (1–5)")
         figd.update_xaxes(range=[1, 5])
+        style_plotly(figd, height=360)
         st.plotly_chart(figd, use_container_width=True)
 
     st.markdown("---")
@@ -979,6 +1048,7 @@ else:
             else:
                 figp = px.bar(dsub, x="Média", y="Indicador", orientation="h", title=f"{perfil} (n={len(sub)})")
                 figp.update_xaxes(range=[1, 5])
+                style_plotly(figp, height=360)
                 st.plotly_chart(figp, use_container_width=True)
 
     st.markdown("---")
